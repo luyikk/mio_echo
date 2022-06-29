@@ -1,3 +1,4 @@
+mod my_hash;
 
 use std::collections::HashMap;
 use std::io::{Read,  Write};
@@ -5,6 +6,7 @@ use std::net::SocketAddr;
 use log::LevelFilter;
 use mio::{Events, Interest, Poll, Token};
 use mio::net::{TcpListener, TcpStream};
+use crate::my_hash::MyHashBuilder;
 
 const SERVER: Token = Token(0);
 
@@ -27,7 +29,7 @@ fn main()->anyhow::Result<()> {
     poll.registry()
         .register(&mut listener, SERVER, Interest::READABLE)?;
 
-    let mut clients = HashMap::new();
+    let mut clients = HashMap::with_hasher(MyHashBuilder::new());
 
     let mut unique_token = Token(SERVER.0 + 1);
 
