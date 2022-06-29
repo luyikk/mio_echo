@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{Read,  Write};
+use std::net::SocketAddr;
 use log::LevelFilter;
 use mio::{Events, Interest, Poll, Token};
 use mio::net::{TcpListener, TcpStream};
@@ -9,6 +10,7 @@ const SERVER: Token = Token(0);
 fn main()->anyhow::Result<()> {
     struct Client {
         socket: TcpStream,
+        peer_addr:SocketAddr,
         buff: [u8; 1024],
         len: usize,
     }
@@ -37,17 +39,21 @@ fn main()->anyhow::Result<()> {
                 //表示可accept
                 let (mut socket, addr) = listener.accept()?;
                 log::info!("addr:{} connect", addr);
+                poll.registry()
+                    .reregister(&mut listener, SERVER, Interest::READABLE)?;
+
                 let client_key =next(&mut unique_token);
                 poll.registry().register(
                     &mut socket,
                     client_key,
                     Interest::READABLE,
                 )?;
-
+                let peer_addr=socket.peer_addr()?;
                 clients.insert(
                     client_key,
                     Client {
                         socket,
+                        peer_addr,
                         buff: [0; 1024],
                         len: 0,
                     },
@@ -88,7 +94,7 @@ fn main()->anyhow::Result<()> {
                 if disconnect {
                     let mut client = clients.remove(&token).unwrap();
                     poll.registry().deregister(&mut client.socket)?;
-                    log::info!("addr:{} disconnect", client.socket.peer_addr()?);
+                    log::info!("addr:{} disconnect", client.peer_addr);
                 }
             }
         }
