@@ -86,6 +86,14 @@ fn main()->anyhow::Result<()> {
                     let mut client = clients.remove(&token).unwrap();
                     poll.registry().deregister(&mut client.socket)?;
                     log::info!("addr:{} disconnect", client.peer_addr);
+                }else {
+                    if !cfg!(linux) {
+                        poll.registry().reregister(
+                            &mut client.socket,
+                            token,
+                            Interest::READABLE.add(Interest::WRITABLE),
+                        )?;
+                    }
                 }
             }
         }
