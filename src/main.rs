@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::io::{Read,  Write};
 use std::net::SocketAddr;
 use log::LevelFilter;
 use mio::{Events, Interest, Poll, Token};
 use mio::net::{TcpListener, TcpStream};
+use slab::Slab;
 
 
 const SERVER: Token = Token(0);
@@ -21,17 +21,18 @@ fn main()->anyhow::Result<()> {
         .init();
 
     let mut poll = Poll::new()?;
-    let mut events = Events::with_capacity(1024);
+
     let mut listener = TcpListener::bind("0.0.0.0:55555".parse()?)?;
 
     poll.registry()
         .register(&mut listener, SERVER, Interest::READABLE)?;
 
-    let mut clients = HashMap::new();
-
-    let mut unique_token = Token(SERVER.0 + 1);
+    let mut clients = Slab::with_capacity(1024);
+    clients.insert(None);
+    let mut events = Events::with_capacity(1024);
 
     loop {
+
         poll.poll(&mut events, None)?;
 
         for event in events.iter() {
@@ -41,31 +42,31 @@ fn main()->anyhow::Result<()> {
                 let (mut socket, peer_addr) = listener.accept()?;
                 log::info!("addr:{} connect", peer_addr);
                 poll.registry()
-                    .reregister(&mut listener, SERVER, Interest::READABLE)?;
+                    .reregister(&mut listener, token, Interest::READABLE)?;
 
-                let client_key =next(&mut unique_token);
                 poll.registry().register(
                     &mut socket,
-                    client_key,
+                    Token(clients.vacant_key()),
                     Interest::READABLE.add(Interest::WRITABLE),
                 )?;
+
                 clients.insert(
-                    client_key,
-                    Client {
+                    Some(Client {
                         socket,
                         peer_addr,
                         buff: [0;1024],
                         len: 0,
-                    },
+                    })
                 );
-            }else if let Some(client) = clients.get_mut(&token){
+
+            }else if let Some(Some(client)) = clients.get_mut(token.0){
                 let mut disconnect = false;
                 if event.is_readable(){
                     let size = match client.socket.read(&mut client.buff[..]) {
                         Ok(n) => n,
                         Err(err) if err.kind() == std::io::ErrorKind::ConnectionReset => 0,
                         Err(err) => {
-                            log::error!("addr:{} error:{}", client.socket.peer_addr()?, err);
+                            log::error!("addr:{} error:{}", client.peer_addr, err);
                             0
                         }
                     };
@@ -76,16 +77,16 @@ fn main()->anyhow::Result<()> {
 
                 if event.is_writable() && client.len>0 {
                     if let Err(err) = client.socket.write(&client.buff[..client.len]) {
-                        log::error!("addr:{} error:{}", client.socket.peer_addr()?, err);
+                        log::error!("addr:{} error:{}", client.peer_addr, err);
                         disconnect = true;
                     }
                     client.len = 0;
                 }
 
                 if disconnect {
-                    let mut client = clients.remove(&token).unwrap();
-                    poll.registry().deregister(&mut client.socket)?;
-                    log::info!("addr:{} disconnect", client.peer_addr);
+                    let mut client = clients.remove(token.0);
+                    poll.registry().deregister(&mut client.as_mut().unwrap().socket)?;
+                    log::info!("addr:{} disconnect", client.unwrap().peer_addr);
                 }else {
                     if !cfg!(unix) {
                         poll.registry().reregister(
@@ -97,12 +98,7 @@ fn main()->anyhow::Result<()> {
                 }
             }
         }
-    }
-}
 
-#[inline]
-fn next(current: &mut Token) -> Token {
-    let next = current.0;
-    current.0 += 1;
-    Token(next)
+
+    }
 }
