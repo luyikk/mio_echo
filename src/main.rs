@@ -87,7 +87,7 @@ fn main()->anyhow::Result<()> {
                     poll.registry().deregister(&mut client.socket)?;
                     log::info!("addr:{} disconnect", client.peer_addr);
                 }else {
-                    if !cfg!(linux) {
+                    if !cfg!(unix) {
                         poll.registry().reregister(
                             &mut client.socket,
                             token,
