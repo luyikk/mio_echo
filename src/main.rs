@@ -12,7 +12,7 @@ fn main()->anyhow::Result<()> {
     struct Client {
         socket: TcpStream,
         peer_addr:SocketAddr,
-        buff: Vec<u8>,
+        buff: [u8;1024],
         len: usize,
     }
 
@@ -51,15 +51,15 @@ fn main()->anyhow::Result<()> {
                 )?;
                 let peer_addr=socket.peer_addr()?;
                 clients.insert(
-                    client_key.0,
+                    client_key,
                     Client {
                         socket,
                         peer_addr,
-                        buff: vec![0;1024],
+                        buff: [0;1024],
                         len: 0,
                     },
                 );
-            }else if let Some(client) = clients.get_mut(&token.0){
+            }else if let Some(client) = clients.get_mut(&token){
                 let mut disconnect = false;
                 if event.is_readable(){
                     let size = match client.socket.read(&mut client.buff[..]) {
@@ -75,18 +75,16 @@ fn main()->anyhow::Result<()> {
 
                 }
 
-                if event.is_writable(){
-                    if client.len>0 {
-                        if let Err(err) = client.socket.write(&client.buff[..client.len]) {
-                            log::error!("addr:{} error:{}", client.socket.peer_addr()?, err);
-                            disconnect = true;
-                        }
-                        client.len=0;
+                if event.is_writable() && client.len>0 {
+                    if let Err(err) = client.socket.write(&client.buff[..client.len]) {
+                        log::error!("addr:{} error:{}", client.socket.peer_addr()?, err);
+                        disconnect = true;
                     }
+                    client.len = 0;
                 }
 
                 if disconnect {
-                    let mut client = clients.remove(&token.0).unwrap();
+                    let mut client = clients.remove(&token).unwrap();
                     poll.registry().deregister(&mut client.socket)?;
                     log::info!("addr:{} disconnect", client.peer_addr);
                 }
