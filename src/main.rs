@@ -38,8 +38,8 @@ fn main()->anyhow::Result<()> {
             let token=event.token();
             if token==SERVER{
                 //表示可accept
-                let (mut socket, addr) = listener.accept()?;
-                log::info!("addr:{} connect", addr);
+                let (mut socket, peer_addr) = listener.accept()?;
+                log::info!("addr:{} connect", peer_addr);
                 poll.registry()
                     .reregister(&mut listener, SERVER, Interest::READABLE)?;
 
@@ -49,7 +49,6 @@ fn main()->anyhow::Result<()> {
                     client_key,
                     Interest::READABLE.add(Interest::WRITABLE),
                 )?;
-                let peer_addr=socket.peer_addr()?;
                 clients.insert(
                     client_key,
                     Client {
