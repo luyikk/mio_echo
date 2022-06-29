@@ -1,4 +1,3 @@
-mod my_hash;
 
 use std::collections::HashMap;
 use std::io::{Read,  Write};
@@ -13,7 +12,7 @@ fn main()->anyhow::Result<()> {
     struct Client {
         socket: TcpStream,
         peer_addr:SocketAddr,
-        buff: [u8; 1024],
+        buff: Vec<u8>,
         len: usize,
     }
 
@@ -28,7 +27,7 @@ fn main()->anyhow::Result<()> {
     poll.registry()
         .register(&mut listener, SERVER, Interest::READABLE)?;
 
-    let mut clients = HashMap::with_hasher(my_hash::MyHashBuilder::new());
+    let mut clients = HashMap::new();
 
     let mut unique_token = Token(SERVER.0 + 1);
 
@@ -56,7 +55,7 @@ fn main()->anyhow::Result<()> {
                     Client {
                         socket,
                         peer_addr,
-                        buff: [0; 1024],
+                        buff: vec![0;1024],
                         len: 0,
                     },
                 );
