@@ -47,7 +47,7 @@ fn main()->anyhow::Result<()> {
                 poll.registry().register(
                     &mut socket,
                     client_key,
-                    Interest::READABLE,
+                    Interest::READABLE.add(Interest::WRITABLE),
                 )?;
                 let peer_addr=socket.peer_addr()?;
                 clients.insert(
@@ -73,23 +73,16 @@ fn main()->anyhow::Result<()> {
                     client.len = size;
                     disconnect = size == 0;
 
-                    poll.registry().reregister(
-                        &mut client.socket,
-                        token,
-                        Interest::WRITABLE,
-                    )?;
+                }
 
-                }else if event.is_writable(){
-                    if let Err(err) = client.socket.write(&client.buff[..client.len]) {
-                        log::error!("addr:{} error:{}", client.socket.peer_addr()?, err);
-                        disconnect = true;
+                if event.is_writable(){
+                    if client.len>0 {
+                        if let Err(err) = client.socket.write(&client.buff[..client.len]) {
+                            log::error!("addr:{} error:{}", client.socket.peer_addr()?, err);
+                            disconnect = true;
+                        }
+                        client.len=0;
                     }
-
-                    poll.registry().reregister(
-                        &mut client.socket,
-                        token,
-                        Interest::READABLE,
-                    )?;
                 }
 
                 if disconnect {
