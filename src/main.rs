@@ -1,3 +1,5 @@
+mod my_hash;
+
 use std::collections::HashMap;
 use std::io::{Read,  Write};
 use std::net::SocketAddr;
@@ -26,7 +28,7 @@ fn main()->anyhow::Result<()> {
     poll.registry()
         .register(&mut listener, SERVER, Interest::READABLE)?;
 
-    let mut clients = HashMap::new();
+    let mut clients = HashMap::with_hasher(my_hash::MyHashBuilder::new());
 
     let mut unique_token = Token(SERVER.0 + 1);
 
@@ -50,7 +52,7 @@ fn main()->anyhow::Result<()> {
                 )?;
                 let peer_addr=socket.peer_addr()?;
                 clients.insert(
-                    client_key,
+                    client_key.0,
                     Client {
                         socket,
                         peer_addr,
@@ -58,7 +60,7 @@ fn main()->anyhow::Result<()> {
                         len: 0,
                     },
                 );
-            }else if let Some(client) = clients.get_mut(&token){
+            }else if let Some(client) = clients.get_mut(&token.0){
                 let mut disconnect = false;
                 if event.is_readable(){
                     let size = match client.socket.read(&mut client.buff[..]) {
@@ -92,7 +94,7 @@ fn main()->anyhow::Result<()> {
                 }
 
                 if disconnect {
-                    let mut client = clients.remove(&token).unwrap();
+                    let mut client = clients.remove(&token.0).unwrap();
                     poll.registry().deregister(&mut client.socket)?;
                     log::info!("addr:{} disconnect", client.peer_addr);
                 }
